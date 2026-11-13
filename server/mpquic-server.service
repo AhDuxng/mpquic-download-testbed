@@ -1,0 +1,17 @@
+[Unit]
+Description=MPQUIC HTTP/3 file server (picoquicdemo -M)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/run_server.sh
+Restart=on-failure
+RestartSec=2
+# UDP buffer sysctls are set by setup_server.sh (/etc/sysctl.d/90-mpquic.conf).
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

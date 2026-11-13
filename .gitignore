@@ -1,0 +1,6 @@
+third_party/
+bin/
+results/
+downloads/
+*.bin
+__pycache__/

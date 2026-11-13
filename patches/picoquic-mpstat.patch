@@ -1,0 +1,27 @@
+diff --git a/picoquicfirst/picoquicdemo.c b/picoquicfirst/picoquicdemo.c
+index cdaa25f..9bd8437 100644
+--- a/picoquicfirst/picoquicdemo.c
++++ b/picoquicfirst/picoquicdemo.c
+@@ -1250,6 +1250,22 @@ int quic_client(const char* ip_address_text, int server_port,
+                             cnx_client->path[i]->pkt_ctx.send_sequence);
+                     }
+                 }
++                /* MPQUIC experiment: machine-readable per path statistics (client side) */
++                for (int i = 0; i < cnx_client->nb_paths; i++) {
++                    picoquic_path_t* p = cnx_client->path[i];
++                    char l_txt[128], p_txt[128];
++                    printf("MPSTAT path=%d unique_id=%" PRIu64 " local=%s peer=%s bytes_received=%" PRIu64
++                        " bytes_sent=%" PRIu64 " srtt_us=%" PRIu64 " rtt_min_us=%" PRIu64
++                        " lost_bytes=%" PRIu64 " losses=%" PRIu64 "\n",
++                        i, p->unique_path_id,
++                        picoquic_addr_text((struct sockaddr*)&p->first_tuple->local_addr, l_txt, sizeof(l_txt)),
++                        picoquic_addr_text((struct sockaddr*)&p->first_tuple->peer_addr, p_txt, sizeof(p_txt)),
++                        p->received, p->bytes_sent, p->smoothed_rtt, p->rtt_min,
++                        p->total_bytes_lost, p->nb_losses_found);
++                }
++                printf("MPSTAT_SUMMARY multipath=%d nb_paths=%d bytes_received=%" PRIu64 " duration_us=%.0f\n",
++                    cnx_client->is_multipath_enabled, cnx_client->nb_paths,
++                    picoquic_get_data_received(cnx_client), duration_usec);
+                 /* Print details on system call durations */
+                 printf("System call duration max: %"PRIu64 "\n", loop_cb.sc_duration.scd_max);
+                 printf("System call duration smoothed: %"PRIu64 "\n", loop_cb.sc_duration.scd_smoothed);
