@@ -155,37 +155,3 @@ sudo client/shape_paths.sh del eth0; sudo client/shape_paths.sh del usb0
 ```
 Script chỉ shape chiều tải xuống (ingress → ifb → netem). Nên ghi cấu hình shaping vào `--label`.
 
----
-
-## 3. Đọc kết quả cho đúng
-
-- **Goodput** = kích thước file / thời gian kết nối của picoquic (từ lúc bắt đầu kết nối tới lúc
-  đóng, *gồm cả handshake*). Với file nhỏ, handshake chiếm phần lớn thời gian, nên mức lợi
-  của multipath chủ yếu thể hiện ở file lớn.
-- **Lần tải hỏng không bị loại bỏ**: những lần SHA-256 sai hoặc timeout vẫn nằm trong CSV với
-  `ok=0`. Cột `ok/n` cho biết số lần thành công.
-- **So sánh ghép cặp**: `analyze.py` chia goodput của mode cho goodput của `sp` trong cùng lần
-  lặp và cùng file, nên giảm được ảnh hưởng của dao động mạng theo thời gian. Thứ tự các mode
-  được xáo trong mỗi lần lặp, seed ghi trong `meta.txt`.
-- Mỗi lần tải dùng thư mục làm việc mới nên không có session ticket, tức là luôn full handshake
-  và không có 0-RTT làm lệch kết quả.
-- **Multipath chỉ cộng được băng thông khi hai path có bottleneck riêng.** `mp-sim` chung một
-  bottleneck, nên MP/SP ≈ 1 là kết quả *đúng như dự đoán*, không phải lỗi. Nếu băng thông phía
-  AWS (giới hạn theo loại instance) nhỏ hơn tổng hai đường của client, bottleneck sẽ nằm ở server.
-- Scheduler của picoquic phân phối gói theo congestion window từng path. Khi hai path chênh
-  RTT nhiều, gói về không theo thứ tự (head-of-line ở tầng stream) có thể làm MP *chậm hơn* SP.
-  Đây là hiện tượng đáng đo, cột `pX_share` và `pX_srtt_ms` giúp giải thích.
-- Nên chạy n ≥ 20–30 mỗi nhóm. Script sẽ cảnh báo khi nhóm có ít hơn 10 lần.
-
-## 4. Xử lý sự cố
-
-| Triệu chứng | Nguyên nhân thường gặp |
-|---|---|
-| Client treo rồi timeout, không thấy `Negotiated ALPN` | Security Group chưa mở UDP 4443, hoặc mạng client chặn UDP |
-| `Cannot send GET command` | Thiếu SNI. Script đã truyền `-n mpquic.local`; nếu tự chạy tay thì phải thêm `-n` |
-| `Cannot parse the specified scenario` | Đường dẫn file phải bắt đầu bằng `/` (vd. `/file_10MB.bin`) |
-| `Enable multipath: Refused` | Server chạy thiếu `-M` (xem `run_server.sh`) |
-| Chỉ có `MPSTAT path=0` ở chế độ `mp` | Sai ip/ifindex, interface 2 không có route ra Internet, hoặc bị rp_filter (xem 2.3) |
-| `cpu_pct` ≈ 100 % | Pi nghẽn CPU: kiểm tra `CLIENT_CIPHER="20"`, tản nhiệt và `vcgencmd get_throttled` |
-| Chạy `mp` thì path 0 và path 1 cùng `local=` IP | Sai `ALT_PATHS` (đang trỏ vào IP của interface mặc định) |
-| Có path 1 nhưng `bytes_received` ≈ 0 | Path 1 bị mất gói liên tục nên bị picoquic đánh dấu suspended. Kiểm tra lại bằng `ping -I <if2> 47.129.174.173` |
