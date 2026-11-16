@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# File        : server/run_server.sh
+# File        : server/run_mpquic_server.sh
 # Project     : mpquic-download-testbed
-# Description : Runs the HTTP/3 file server in the foreground. Installed into
+# Description : Runs the HTTP/3 (MPQUIC) file server in the foreground. Installed
+#               into
 #               SERVER_INSTALL_DIR by setup_server.sh and executed from there by
 #               systemd (mpquic-server.service) or by start_server.sh.
 #
@@ -11,6 +12,7 @@
 #               -p PORT       UDP port            -w DIR   web root
 #               -c/-k FILE    certificate / key   -q DIR   qlog output
 #               -B BYTES      UDP socket buffer size
+#               -G ALGO       congestion control (CONGESTION_CONTROL in config.env)
 #
 # Environment : QLOG=1        write one qlog per connection to qlog/ (large for
 #                             big files; enable only for debugging)
@@ -24,6 +26,7 @@ D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$D/config.env"
 
 ARGS=(-M -p "$SERVER_PORT" -w "$D/www" -c "$D/certs/cert.pem" -k "$D/certs/key.pem")
+[ -n "${CONGESTION_CONTROL:-}" ] && ARGS+=(-G "$CONGESTION_CONTROL")
 [ -n "${SO_BUF:-}" ] && ARGS+=(-B "$SO_BUF")
 if [ "${QLOG:-0}" = "1" ]; then
     mkdir -p "$D/qlog"

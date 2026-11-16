@@ -27,7 +27,7 @@ SSH=(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new "$REMOTE")
 
 rsync -az --delete -e "ssh -i $SSH_KEY" \
     --exclude third_party --exclude bin --exclude results --exclude run \
-    --exclude .git --exclude build.log \
+    --exclude .git --exclude "*.log" --exclude __pycache__ \
     "$ROOT/" "$REMOTE:$REMOTE_REPO_DIR/"
 
 case "$MODE" in

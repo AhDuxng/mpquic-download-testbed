@@ -7,3 +7,5 @@ build.log
 *.bin
 __pycache__/
 .DS_Store
+install.log
+setup.log

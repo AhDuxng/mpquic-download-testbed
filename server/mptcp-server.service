@@ -1,0 +1,23 @@
+# =============================================================================
+# File        : server/mptcp-server.service
+# Project     : mpquic-download-testbed
+# Description : systemd unit template for the HTTPS (MPTCP) file server.
+#               setup_server.sh replaces @USER@ and @DIR@ (SERVER_INSTALL_DIR)
+#               and installs the result as /etc/systemd/system/mptcp-server.service.
+# =============================================================================
+[Unit]
+Description=MPTCP HTTPS file server (mptcp_https_server.py)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/run_mptcp_server.sh
+Restart=on-failure
+RestartSec=2
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# File        : client/download.sh
+# File        : client/mpquic/download.sh
 # Project     : mpquic-download-testbed
 # Description : Downloads one file once over multipath QUIC, for setup checks
 #               and smoke tests, and prints the lines that show whether
 #               multipath was negotiated and whether every path carried data.
 #
-# Usage       : ALT_PATHS="<ip>/<ifindex>" client/download.sh <file> [outdir]
-# Example     : ALT_PATHS="10.50.40.68/3" client/download.sh file_10MB.bin
+# Usage       : ALT_PATHS="<ip>/<ifindex>" client/mpquic/download.sh <file> [outdir]
+# Example     : ALT_PATHS="10.50.40.68/3" client/mpquic/download.sh file_10MB.bin
 #
 # Environment : ALT_PATHS   required; local address and interface index of each
 #                           additional path, comma separated
@@ -25,8 +25,8 @@
 # =============================================================================
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=../config.env
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../config.env
 source "$ROOT/config.env"
 BIN="$ROOT/bin/picoquicdemo"
 

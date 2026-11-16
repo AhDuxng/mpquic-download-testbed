@@ -1,7 +1,7 @@
 # =============================================================================
 # File        : server/mpquic-server.service
 # Project     : mpquic-download-testbed
-# Description : systemd unit template for the HTTP/3 multipath file server.
+# Description : systemd unit template for the HTTP/3 (MPQUIC) file server.
 #               setup_server.sh replaces @USER@ and @DIR@ (SERVER_INSTALL_DIR)
 #               and installs the result as /etc/systemd/system/mpquic-server.service.
 #               UDP buffer limits are set separately in /etc/sysctl.d/90-mpquic.conf.
@@ -16,7 +16,7 @@ Wants=network-online.target
 Type=simple
 User=@USER@
 WorkingDirectory=@DIR@
-ExecStart=@DIR@/run_server.sh
+ExecStart=@DIR@/run_mpquic_server.sh
 Restart=on-failure
 RestartSec=2
 LimitNOFILE=65536

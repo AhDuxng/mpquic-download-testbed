@@ -2,17 +2,22 @@
 # =============================================================================
 # File        : server/start_server.sh
 # Project     : mpquic-download-testbed
-# Description : Starts or stops the HTTP/3 server in the background without
-#               systemd, for hosts set up with `setup_server.sh --no-service`.
-#               The process is detached from the terminal (setsid + nohup), so
-#               it survives the end of the SSH session but not a reboot.
+# Description : Starts, stops or inspects the file servers in the background
+#               without systemd, for hosts set up with
+#               `setup_server.sh --no-service`. Each process is detached from
+#               the terminal (setsid + nohup): it survives the end of the SSH
+#               session but not a reboot.
 #
-# Usage       : server/start_server.sh            start (QLOG=1 to enable qlog)
-#               server/start_server.sh --stop     stop
-#               server/start_server.sh --status   show process and UDP socket
+# Usage       : server/start_server.sh [--stop|--status] [mpquic|mptcp|all]
+#               The target defaults to all.
+# Examples    : server/start_server.sh                 start both servers
+#               server/start_server.sh --status        show both
+#               server/start_server.sh --stop mptcp    stop the MPTCP server
+#               QLOG=1 server/start_server.sh mpquic   MPQUIC server with qlog
 #
-# Files       : SERVER_INSTALL_DIR/server.pid   process id
-#               SERVER_INSTALL_DIR/server.log   stdout and stderr
+# Servers     : mpquic  run_mpquic_server.sh  HTTP/3 on UDP SERVER_PORT
+#               mptcp   run_mptcp_server.sh   HTTPS on TCP MPTCP_PORT
+# Files       : SERVER_INSTALL_DIR/<name>.pid and <name>.log
 # =============================================================================
 set -euo pipefail
 
@@ -20,35 +25,51 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=../config.env
 source "$ROOT/config.env"
 D="$SERVER_INSTALL_DIR"
-PIDFILE="$D/server.pid"
 
-running() { [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
+ACTION=start
+TARGET=all
+for arg in "$@"; do
+    case "$arg" in
+        --stop)   ACTION=stop ;;
+        --status) ACTION=status ;;
+        mpquic|mptcp|all) TARGET="$arg" ;;
+        *) echo "usage: $0 [--stop|--status] [mpquic|mptcp|all]" >&2; exit 1 ;;
+    esac
+done
+[ "$TARGET" = "all" ] && NAMES=(mpquic mptcp) || NAMES=("$TARGET")
 
-case "${1:-}" in
-    --stop)
-        if running; then
-            kill "$(cat "$PIDFILE")" && rm -f "$PIDFILE" && echo "Stopped."
-        else
-            echo "Not running."
+pidfile() { echo "$D/$1.pid"; }
+running() { [ -f "$(pidfile "$1")" ] && kill -0 "$(cat "$(pidfile "$1")")" 2>/dev/null; }
+port_of() { [ "$1" = "mpquic" ] && echo "udp/$SERVER_PORT" || echo "tcp/$MPTCP_PORT"; }
+
+for name in "${NAMES[@]}"; do
+    case "$ACTION" in
+    start)
+        script="$D/run_${name}_server.sh"
+        [ -x "$script" ] || { echo "$name: $script missing, run server/setup_server.sh first." >&2; exit 1; }
+        if running "$name"; then
+            echo "$name: already running, pid $(cat "$(pidfile "$name")")"
+            continue
         fi
-        ;;
-    --status)
-        if running; then
-            echo "Running, pid $(cat "$PIDFILE")"
-            ss -ulpn 2>/dev/null | grep ":$SERVER_PORT " || true
-        else
-            echo "Not running."
-        fi
-        ;;
-    "")
-        [ -x "$D/run_server.sh" ] || { echo "Run server/setup_server.sh first." >&2; exit 1; }
-        running && { echo "Already running, pid $(cat "$PIDFILE")."; exit 0; }
-        setsid nohup "$D/run_server.sh" >"$D/server.log" 2>&1 </dev/null &
-        echo $! >"$PIDFILE"
+        setsid nohup "$script" >"$D/$name.log" 2>&1 </dev/null &
+        echo $! >"$(pidfile "$name")"
         sleep 1
-        running || { echo "Server exited; see $D/server.log" >&2; exit 1; }
-        echo "Started, pid $(cat "$PIDFILE"), udp/$SERVER_PORT, log $D/server.log"
+        running "$name" || { echo "$name: exited, see $D/$name.log" >&2; exit 1; }
+        echo "$name: started, pid $(cat "$(pidfile "$name")"), $(port_of "$name"), log $D/$name.log"
         ;;
-    *)
-        echo "usage: $0 [--stop|--status]" >&2; exit 1 ;;
-esac
+    stop)
+        if running "$name"; then
+            kill "$(cat "$(pidfile "$name")")" && rm -f "$(pidfile "$name")" && echo "$name: stopped"
+        else
+            echo "$name: not running"
+        fi
+        ;;
+    status)
+        if running "$name"; then
+            echo "$name: running, pid $(cat "$(pidfile "$name")"), $(port_of "$name")"
+        else
+            echo "$name: not running"
+        fi
+        ;;
+    esac
+done
