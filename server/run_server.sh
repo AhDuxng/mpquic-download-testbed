@@ -1,8 +1,22 @@
 #!/usr/bin/env bash
-# Start the MPQUIC HTTP/3 file server (foreground; systemd runs this).
-#   -M  : advertise QUIC multipath (initial_max_path_id = 2 -> up to 3 paths)
-#   -w  : web root,  -c/-k : cert/key,  -p : UDP port
-# Optional: QLOG=1 to write qlog per connection into qlog/ (large for big files).
+# =============================================================================
+# File        : server/run_server.sh
+# Project     : mpquic-download-testbed
+# Description : Runs the HTTP/3 file server in the foreground. Installed into
+#               SERVER_INSTALL_DIR by setup_server.sh and executed from there by
+#               systemd (mpquic-server.service) or by start_server.sh.
+#
+# picoquic    : -M            advertise QUIC multipath (initial_max_path_id = 2,
+#                             i.e. up to 3 paths per connection)
+#               -p PORT       UDP port            -w DIR   web root
+#               -c/-k FILE    certificate / key   -q DIR   qlog output
+#               -B BYTES      UDP socket buffer size
+#
+# Environment : QLOG=1        write one qlog per connection to qlog/ (large for
+#                             big files; enable only for debugging)
+#               SO_BUF=BYTES  request larger UDP socket buffers, e.g. 4194304
+# Working dir : logs/, where picoquicdemo writes its ticket and token stores.
+# =============================================================================
 set -euo pipefail
 
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,12 +24,11 @@ D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$D/config.env"
 
 ARGS=(-M -p "$SERVER_PORT" -w "$D/www" -c "$D/certs/cert.pem" -k "$D/certs/key.pem")
-# Optional: SO_BUF=4194304 to request bigger UDP socket buffers (-B)
 [ -n "${SO_BUF:-}" ] && ARGS+=(-B "$SO_BUF")
 if [ "${QLOG:-0}" = "1" ]; then
     mkdir -p "$D/qlog"
     ARGS+=(-q "$D/qlog")
 fi
 
-cd "$D/logs"   # picoquicdemo writes ticket/token stores in the cwd
+cd "$D/logs"
 exec "$D/bin/picoquicdemo" "${ARGS[@]}"

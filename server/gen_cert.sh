@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
-# Self-signed certificate for the server (IP + SNI name in SAN).
-# picoquicdemo as a client does not verify the chain unless -t is given,
-# so a self-signed cert is enough for the experiment.
+# =============================================================================
+# File        : server/gen_cert.sh
+# Project     : mpquic-download-testbed
+# Description : Creates a self-signed ECDSA P-256 certificate for the server, with
+#               SERVER_SNI and SERVER_IP in the subjectAltName. picoquicdemo does
+#               not verify the certificate chain as a client unless -t is given,
+#               so a self-signed certificate is sufficient for the experiment.
+#
+# Usage       : server/gen_cert.sh
+# Output      : SERVER_INSTALL_DIR/certs/{cert.pem,key.pem}; an existing pair is
+#               kept (delete it to regenerate).
+# =============================================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

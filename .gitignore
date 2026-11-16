@@ -1,6 +1,9 @@
 third_party/
 bin/
+run/
 results/
 downloads/
+build.log
 *.bin
 __pycache__/
+.DS_Store

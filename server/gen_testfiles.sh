@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
-# Generate random (incompressible) test files + SHA256SUMS + index.html in www/.
+# =============================================================================
+# File        : server/gen_testfiles.sh
+# Project     : mpquic-download-testbed
+# Description : Generates the files served to the client. Content comes from
+#               /dev/urandom, so it is incompressible and every byte has to cross
+#               the network. Files that already have the requested size are kept.
+#
+# Usage       : server/gen_testfiles.sh
+# Input       : TEST_FILES in config.env, e.g. "file_10MB.bin:10M" (suffix K, M, G).
+# Output      : SERVER_INSTALL_DIR/www/  test files, SHA256SUMS (lets the client
+#               prove every download is complete and intact) and index.html.
+# =============================================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,7 +20,7 @@ W="$SERVER_INSTALL_DIR/www"
 mkdir -p "$W"
 cd "$W"
 
-to_bytes() {  # 10M -> 10485760
+to_bytes() {
     local v="$1" n="${1%[KMGkmg]}"
     case "$v" in
         *[Kk]) echo $((n * 1024)) ;;
@@ -29,7 +40,6 @@ for spec in $TEST_FILES; do
     head -c "$size" /dev/urandom > "$name"
 done
 
-# Checksums let the client prove each download is complete and intact.
 sha256sum file_*.bin > SHA256SUMS 2>/dev/null || shasum -a 256 file_*.bin > SHA256SUMS
 
 {

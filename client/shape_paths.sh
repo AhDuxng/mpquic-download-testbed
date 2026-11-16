@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# Linux client only: emulate path conditions on the DOWNLOAD direction of one
-# interface (ingress redirected to an ifb device, then netem).
+# =============================================================================
+# File        : client/shape_paths.sh
+# Project     : mpquic-download-testbed
+# Description : Linux only. Emulates path conditions on the DOWNLOAD direction of
+#               one interface: ingress traffic is redirected to an ifb device on
+#               which netem applies rate, delay and loss.
 #
-#   sudo client/shape_paths.sh add  <iface> <rate> <delay> [loss]
-#   sudo client/shape_paths.sh del  <iface>
-#   sudo client/shape_paths.sh show
+# Usage       : sudo client/shape_paths.sh add  <iface> <rate> <delay> [loss]
+#               sudo client/shape_paths.sh del  <iface>
+#               sudo client/shape_paths.sh show
+# Example     : sudo client/shape_paths.sh add eth0  20mbit 10ms
+#               sudo client/shape_paths.sh add wlan0 5mbit  60ms 0.5%
 #
-# Example: path A 20 Mbit/s +10 ms, path B 5 Mbit/s +60 ms, 0.5 % loss
-#   sudo client/shape_paths.sh add eth0  20mbit 10ms
-#   sudo client/shape_paths.sh add wlan0 5mbit  60ms 0.5%
-#
-# Notes:
-# - The added delay is on the downlink only, so RTT grows by <delay>.
-# - netem stacks on top of the real link; the effective rate is min(real, <rate>).
-# - Record the shaping you used in --label of run_experiment.py.
+# Notes       : The delay is added on the downlink only, so RTT grows by <delay>.
+#               netem stacks on the real link: effective rate = min(real, <rate>).
+#               Record the shaping in --label of run_experiment.py.
+# =============================================================================
 set -euo pipefail
 
 CMD="${1:?add|del|show}"
