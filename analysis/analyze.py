@@ -8,7 +8,11 @@ Description : Summarises and compares runs.csv files produced by
 Usage       : python3 analysis/analyze.py <runs.csv> [<runs.csv> ...] [--plot]
 Example     : python3 analysis/analyze.py results/mpquic/<stamp>/runs.csv \\
                                           results/mptcp/<stamp>/runs.csv --plot
+              python3 analysis/analyze.py results/campaign-<stamp>/*/*/runs.csv
 
+Scenarios   : Rows are grouped by the scenario column (low, medium, high, ...)
+              written by client/run_campaign.sh; each scenario gets its own
+              set of tables. Rows without a scenario form one group.
 Per protocol and file
               ok/n       successful downloads (SHA-256 verified) / all runs
               mp/ok      successful runs in which multipath was really used
@@ -41,6 +45,7 @@ from pathlib import Path
 
 MAX_PATHS = 3
 PROTO_ORDER = {"mpquic": 0, "mptcp": 1}
+SCENARIO_ORDER = {"low": 0, "medium": 1, "high": 2}
 
 
 def pct(xs, q):
@@ -69,17 +74,7 @@ def proto_of(r):
     return "mpquic" if "p0_bytes" in r else "unknown"
 
 
-def main():
-    paths = [Path(a) for a in sys.argv[1:] if not a.startswith("--")]
-    if not paths:
-        sys.exit(__doc__)
-    rows = []
-    for p in paths:
-        with open(p, newline="") as f:
-            rows += list(csv.DictReader(f))
-    if not rows:
-        sys.exit("empty CSV")
-
+def report(rows):
     groups = defaultdict(list)
     for r in rows:
         groups[(proto_of(r), r["file"])].append(r)
@@ -90,7 +85,9 @@ def main():
     protos = sorted({p for p, _ in groups}, key=lambda p: PROTO_ORDER.get(p, 9))
     labels = sorted({r.get("label", "") for r in rows} - {""})
 
-    print(f"{len(rows)} runs, protocols: {', '.join(protos)}" + (f", label: {'; '.join(labels)}" if labels else ""))
+    lab = (f", label: {'; '.join(labels)}" if 0 < len(labels) <= 3
+           else (f", {len(labels)} distinct labels" if labels else ""))
+    print(f"{len(rows)} runs, protocols: {', '.join(protos)}{lab}")
     print("Goodput in Mbit/s (file bytes / download duration incl. handshake)\n")
     hdr = (f"{'file':16s} {'proto':7s} {'ok/n':>7s} {'mp/ok':>7s} {'med':>8s} {'p25':>8s} {'p75':>8s} "
            f"{'p95':>8s} {'mean':>8s} {'sd':>7s} {'t_med(s)':>9s} {'cpu%':>5s}")
@@ -173,16 +170,44 @@ def main():
     if n_min < 10:
         print(f"Note: only {n_min} run(s) in the smallest group; treat medians as indicative.")
 
+
+def main():
+    paths = [Path(a) for a in sys.argv[1:] if not a.startswith("--")]
+    if not paths:
+        sys.exit(__doc__)
+    rows = []
+    for p in paths:
+        with open(p, newline="") as f:
+            rows += list(csv.DictReader(f))
+    if not rows:
+        sys.exit("empty CSV")
+
+    scenarios = sorted({r.get("scenario", "") for r in rows}, key=lambda s: (SCENARIO_ORDER.get(s, 9), s))
+    for sc in scenarios:
+        if len(scenarios) > 1 or sc:
+            title = f"Scenario: {sc or '(none)'}"
+            print("=" * 100 + f"\n{title}\n" + "=" * 100)
+        report([r for r in rows if r.get("scenario", "") == sc])
+        print()
+
     if "--plot" in sys.argv:
+        groups = defaultdict(list)
+        for r in rows:
+            groups[(r.get("scenario", ""), proto_of(r), r["file"])].append(r)
+        sizes = defaultdict(int)
+        for r in rows:
+            sizes[r["file"]] = max(sizes[r["file"]], int(r.get("file_bytes") or 0))
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        keys = [(p, f) for f in files for p in protos if (p, f) in groups]
-        fig, ax = plt.subplots(figsize=(1.4 * len(keys) + 2, 4.5))
+        keys = sorted(groups, key=lambda k: (SCENARIO_ORDER.get(k[0], 9), k[0], sizes[k[2]],
+                                             PROTO_ORDER.get(k[1], 9)))
+        fig, ax = plt.subplots(figsize=(1.1 * len(keys) + 2, 4.8))
         data = [col([r for r in groups[k] if r["ok"] == "1"], "goodput_mbps") for k in keys]
         ax.boxplot(data, showfliers=True)
         ax.set_xticks(range(1, len(keys) + 1),
-                      [f"{f.replace('file_', '').replace('.bin', '')}\n{p}" for p, f in keys])
+                      [f"{sc}\n{f.replace('file_', '').replace('.bin', '')}\n{p}" for sc, p, f in keys],
+                      fontsize=7)
         ax.set_ylabel("Goodput (Mbit/s)")
         ax.set_title("Download goodput: MPQUIC vs MPTCP")
         ax.grid(axis="y", alpha=.3)

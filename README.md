@@ -62,7 +62,9 @@ mpquic-download-testbed/
 │   ├── lib/testbed.py         phần đo dùng chung cho cả hai giao thức
 │   ├── mpquic/                download.sh, run_experiment.py
 │   ├── mptcp/                 setup_mptcp.sh, download.sh, run_experiment.py
-│   └── shape_paths.sh         giả lập băng thông, delay, loss
+│   ├── net_scenario.sh        kịch bản mạng low / medium / high
+│   ├── run_campaign.sh        chiến dịch đo dài (qua đêm), luân phiên kịch bản và giao thức
+│   └── shape_paths.sh         giả lập băng thông, delay, loss tuỳ ý
 └── analysis/analyze.py        thống kê và so sánh MPQUIC với MPTCP
 ```
 
@@ -502,6 +504,8 @@ python3 analysis/analyze.py results/mpquic/<stamp>/runs.csv results/mptcp/<stamp
 | `-p` | 1.0 | Thời gian nghỉ giữa hai lần tải (giây) |
 | `--label` | | Ghi chú lưu vào mọi dòng CSV, nên ghi cặp interface và cấu hình shaping |
 | `--seed` | ngẫu nhiên | Seed để xáo thứ tự file, được ghi vào `meta.txt` |
+| `--scenario` | | Tên kịch bản mạng, ghi vào cột `scenario` (do `run_campaign.sh` đặt) |
+| `--out` | `results/<proto>` | Thư mục gốc chứa kết quả |
 | `--qlog` | tắt | (chỉ MPQUIC) Ghi qlog cho mỗi lần tải, xem bằng [qvis](https://qvis.quictools.info) |
 
 Mỗi lần chạy tạo thư mục `results/<mpquic|mptcp>/<stamp>/` gồm:
@@ -565,6 +569,64 @@ sudo client/shape_paths.sh del eth0; sudo client/shape_paths.sh del wlan0
 ```
 Script chỉ shape chiều tải xuống (ingress → ifb → netem), áp dụng như nhau cho UDP và TCP. Nên
 ghi cấu hình shaping vào `--label`.
+
+### 9.5 Kịch bản mạng chuẩn
+
+`net_scenario.sh` áp một trong ba kịch bản lên một hoặc nhiều interface. Mỗi kịch bản gồm một nút
+cổ chai băng thông (`tbf`) và một qdisc con `netem` tạo delay, jitter và loss:
+
+| Kịch bản | Băng thông | Delay | Jitter (phân phối chuẩn) | Loss |
+|---|---|---|---|---|
+| `low` | 40 Mbit/s | 20 ms | 0 ms | 0 % |
+| `medium` | 40 Mbit/s | 20 ms | 4 ms | 1.5 % |
+| `high` | 40 Mbit/s | 20 ms | 16 ms | 3 % |
+
+```bash
+sudo client/net_scenario.sh medium wlan0 eth0     # áp cho cả hai path
+sudo client/net_scenario.sh show   wlan0 eth0
+sudo client/net_scenario.sh clear  wlan0 eth0
+```
+
+Mặc định kịch bản được áp lên **chiều tải xuống** (ingress, qua thiết bị `ifb_<iface>`), vì đó là
+chiều mang dữ liệu file. Đặt `DIRECTION=egress` để áp lên chiều gửi đi của interface (chỉ ảnh hưởng
+request và ACK). Băng thông thực tế bằng min(đường thật, 40 Mbit/s).
+
+### 9.6 Chiến dịch đo dài (qua đêm)
+
+`run_campaign.sh` lặp các vòng đo cho tới hạn giờ. Mỗi vòng chạy cả ba kịch bản trên **tất cả các
+path**, và trong mỗi kịch bản chạy một khối MPQUIC và một khối MPTCP. Thứ tự kịch bản và thứ tự
+giao thức được xáo lại ở mỗi vòng.
+
+```bash
+export PRIMARY_IF=3 ALT_PATHS="192.168.8.107/2"
+sudo -E setsid nohup client/run_campaign.sh --until 07:00 > campaign.out 2>&1 < /dev/null &
+tail -f results/campaign-*/campaign.log
+```
+
+| Tuỳ chọn | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--until HH:MM` | `07:00` | Không bắt đầu khối nào có thể kết thúc sau giờ này |
+| `--files` | `file_1MB.bin,file_10MB.bin,file_50MB.bin` | File tải trong mỗi khối |
+| `--reps` | 1 | Số lần lặp bộ file trong mỗi khối |
+| `--scenarios` | `low,medium,high` | Các kịch bản |
+| `--protos` | `mpquic,mptcp` | Các giao thức |
+| `--timeout` | 300 | Timeout cho mỗi lần tải (giây) |
+| `--poll` | 300 | Thời gian chờ giữa hai lần kiểm tra khi mạng chưa sẵn sàng |
+
+Trước mỗi vòng, script kiểm tra trong điều kiện **không áp kịch bản**:
+1. Mọi interface đều ping được tới server.
+2. Smoke test MPQUIC: tải 1 MB, phải có ít nhất hai path nhận dữ liệu.
+3. Smoke test MPTCP (chỉ khi cổng TCP 8443 mở): MP_CAPABLE được chấp nhận và có ít nhất một subflow join.
+
+Nếu bước 1 hoặc 2 không đạt, script đợi `--poll` giây rồi kiểm tra lại. Nhờ vậy có thể khởi động
+chiến dịch trước khi mạng sẵn sàng. Nếu bước 3 không đạt, vòng đó chạy không có MPTCP. Kết quả nằm
+trong `results/campaign-<stamp>/`:
+- `campaign.log`: quyết định, kết quả kiểm tra, thời lượng từng khối.
+- `mpquic/`, `mptcp/`: kết quả của từng khối.
+- `summary.txt`: báo cáo `analyze.py` theo từng kịch bản, tạo khi chiến dịch kết thúc.
+
+Kịch bản được gỡ sau mỗi khối và khi script kết thúc hoặc bị dừng. Để dừng sớm:
+`sudo kill $(cat results/campaign-*/campaign.pid)`.
 
 ---
 

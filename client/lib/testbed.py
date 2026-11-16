@@ -35,7 +35,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-COMMON_COLS = ["ts", "proto", "label", "rep", "order", "file", "file_bytes", "exit_code", "ok",
+COMMON_COLS = ["ts", "proto", "scenario", "label", "rep", "order", "file", "file_bytes", "exit_code", "ok",
                "mp_active", "nb_paths", "duration_s", "goodput_mbps", "wall_s", "cpu_s", "cpu_pct",
                "soc_temp_c"]
 
@@ -143,6 +143,9 @@ def common_args(ap):
     ap.add_argument("-t", "--timeout", type=int, default=300, help="seconds per download")
     ap.add_argument("-p", "--pause", type=float, default=1.0, help="seconds between runs")
     ap.add_argument("--label", default="", help="free text stored in every row, e.g. 'eth0+wlan0'")
+    ap.add_argument("--scenario", default="", help="network scenario name stored in every row "
+                                                   "(set by client/run_campaign.sh)")
+    ap.add_argument("--out", default=None, help="results base directory (default: results/<proto>)")
     ap.add_argument("--seed", type=int, default=None, help="shuffle seed (recorded)")
     ap.add_argument("--dl-dir", default=None,
                     help="where files are written before the SHA check; default CLIENT_DL_DIR "
@@ -157,7 +160,8 @@ def run_experiment(proto, args, cfg, alt, download_fn, extra_cols, meta_extra=""
     ifaces = path_ifaces(alt)
 
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    resdir = ROOT / "results" / proto / stamp
+    resdir = (Path(args.out) if args.out else ROOT / "results" / proto) / \
+        (f"{stamp}-{args.scenario}" if args.scenario else stamp)
     logdir = resdir / "logs"
     logdir.mkdir(parents=True)
     if args.dl_dir:
@@ -183,7 +187,7 @@ def run_experiment(proto, args, cfg, alt, download_fn, extra_cols, meta_extra=""
     meta = resdir / "meta.txt"
     meta.write_text(
         f"proto={proto}\nstart={stamp}\nserver={cfg['SERVER_IP']}\npicoquic={cfg['PICOQUIC_COMMIT']}\n"
-        f"files={files}\nreps={args.reps}\nseed={seed}\nlabel={args.label}\n"
+        f"files={files}\nreps={args.reps}\nseed={seed}\nscenario={args.scenario}\nlabel={args.label}\n"
         f"ALT_PATHS={alt}\nPRIMARY_IF={os.environ.get('PRIMARY_IF', '')}\npath_ifaces={ifaces}\n"
         f"cipher={cfg.get('CLIENT_CIPHER', '')}\ncc={cfg.get('CONGESTION_CONTROL', '')}\n"
         f"dl_dir={outdir}\n{meta_extra}"
@@ -224,7 +228,8 @@ def run_experiment(proto, args, cfg, alt, download_fn, extra_cols, meta_extra=""
                 ok = int(target.exists() and sha256(target) == ref[fname])
                 fbytes = target.stat().st_size if target.exists() else 0
                 row = {
-                    "ts": ts, "proto": proto, "label": args.label, "rep": rep, "order": pos,
+                    "ts": ts, "proto": proto, "scenario": args.scenario, "label": args.label,
+                    "rep": rep, "order": pos,
                     "file": fname, "file_bytes": fbytes, "exit_code": rc, "ok": ok,
                     "duration_s": f"{dur:.6f}" if dur else "",
                     "goodput_mbps": f"{fbytes * 8 / dur / 1e6:.3f}" if (ok and dur) else "",
@@ -243,7 +248,7 @@ def run_experiment(proto, args, cfg, alt, download_fn, extra_cols, meta_extra=""
                 fcsv.flush()
 
                 shares = " ".join(f"{i}={row[f'rx_share_{i}']}" for i in ifaces)
-                print(f"[{k}/{total}] {proto:6s} {tag:28s} ok={ok} rc={rc} mp={row.get('mp_active', '')} "
+                print(f"[{k}/{total}] {proto:6s} {args.scenario or '-':7s} {tag:28s} ok={ok} rc={rc} mp={row.get('mp_active', '')} "
                       f"paths={row.get('nb_paths', '') or '-'} {row['goodput_mbps'] or '-':>9} Mbps  "
                       f"cpu={row['cpu_pct']:>5}%  rx: {shares}", flush=True)
                 if target.exists():
