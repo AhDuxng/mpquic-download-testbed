@@ -190,7 +190,7 @@ while [ "$stop" = "0" ]; do
     for dev in "${PATH_DEVS[@]}"; do path_ok "$dev" || down+=("$dev"); done
     if [ "${#down[@]}" -gt 0 ]; then
         log "waiting: ${down[*]} cannot reach $SERVER_IP; next check in ${POLL}s"
-        sleep "$(( POLL < DEADLINE - now ? POLL : DEADLINE - now ))"
+        sleep "$(( POLL < DEADLINE - now ? POLL : DEADLINE - now ))" & wait $!
         continue
     fi
 
@@ -200,7 +200,7 @@ while [ "$stop" = "0" ]; do
             mpquic)
                 if ! smoke_mpquic; then
                     log "waiting: MPQUIC smoke test did not use two paths; next check in ${POLL}s"
-                    sleep "$(( POLL < DEADLINE - now ? POLL : DEADLINE - now ))"
+                    sleep "$(( POLL < DEADLINE - now ? POLL : DEADLINE - now ))" & wait $!
                     continue 2
                 fi ;;
             mptcp)
@@ -210,7 +210,7 @@ while [ "$stop" = "0" ]; do
         esac
         protos+=("$p")
     done
-    [ "${#protos[@]}" -gt 0 ] || { sleep "$POLL"; continue; }
+    [ "${#protos[@]}" -gt 0 ] || { sleep "$POLL" & wait $!; continue; }
 
     round=$((round + 1))
     log "round $round: protos ${protos[*]}"
